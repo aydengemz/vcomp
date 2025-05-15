@@ -20,10 +20,10 @@ export default function Home() {
         <h1 className="minimal-title">Claim Your Reward</h1>
         <div className="minimal-instructions">
           <ol>
-            <li>Tap "Claim Now!" Button Below</li>
+            <li>Tap &quot;Claim Now&quot; Button Below</li>
             <li>Enter Your Basic Information</li>
             <li>Complete 2-5 Partner Offers</li>
-            <li>Receive Your Balance & Repeat</li>
+            <li>Receive Your Balance &amp; Repeat</li>
           </ol>
         </div>
         <button
