@@ -21,8 +21,6 @@ export default function AppleRewardPage() {
     // Append rawSearch to BASE_DEST_URL directly
     const destUrl = `${BASE_DEST_URL}${rawSearch}`;
 
-    alert(destUrl);
-
     window.location.href = destUrl;
   }, []);
 
