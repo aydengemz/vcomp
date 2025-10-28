@@ -8,7 +8,7 @@ import Image from "next/image";
 export default function AppleRewardPage() {
   // Put the affiliate base here (must end with &s1=)
   const BASE_DEST_URL =
-    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848/?s1=";
+    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&s1=";
 
   // == SAME LOGIC: slug + query → s1 (supports bare queries like ?thisisworkign) ==
   const handleCTA = useCallback(() => {
@@ -192,7 +192,7 @@ export default function AppleRewardPage() {
 
         main { padding: 2rem 1.5rem; max-width: 28rem; margin: 0 auto; }
         h1 { font-size: 1.875rem; font-weight: 600; color: #111827; text-align: center; margin-bottom: 0.5rem; line-height: 1.25; }
-        .subtitle { font-size: 0.875rem; color: #4b5563; text-align: center; margin-bottom: 2rem; }
+        .subtitle { font-size: 0.875rem; color: #4b5563; text-align: center; margin-bottom: 1.5rem; }
 
         .steps { margin-bottom: 2rem; }
         .step { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 1.5rem; }
