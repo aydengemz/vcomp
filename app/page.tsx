@@ -6,41 +6,23 @@ import Script from "next/script";
 import Image from "next/image";
 
 export default function AppleRewardPage() {
-  // Put the affiliate base here (must end with &s1=)
   const BASE_DEST_URL =
-    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&s1=";
+    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&source=";
 
-  // == SAME LOGIC: slug + query → s1 (supports bare queries like ?thisisworkign) ==
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    // 1) First path segment as slug (supports /, /slug, /slug/anything)
-    const pathSegments = window.location.pathname.replace(/^\/|\/$/g, "").split("/");
-    const slugValue = pathSegments[0] || "";
-
-    // 2) Raw query, without '?'
+    // Get everything after the question mark in the current URL (i.e., the query string without '?')
     const rawSearch = window.location.search.startsWith("?")
       ? window.location.search.slice(1)
       : window.location.search;
 
-    // 3) If query has '=', treat as key=value string; else keep as plain text
-    let queryPart = "";
-    if (rawSearch) {
-      queryPart = rawSearch.includes("=") ? rawSearch : rawSearch.trim();
-    }
 
-    // 4) Build s1 payload
-    const s1Payload = queryPart
-      ? slugValue
-        ? `${slugValue}:${queryPart}`
-        : queryPart
-      : slugValue;
+    // Append rawSearch to BASE_DEST_URL directly
+    const destUrl = `${BASE_DEST_URL}${rawSearch}`;
 
-    // 5) Final destination
-    const destUrl = `${BASE_DEST_URL}${encodeURIComponent(s1Payload)}`;
-    console.log("Redirecting to:", destUrl);
+    alert(destUrl);
 
-    // 6) Redirect
     window.location.href = destUrl;
   }, []);
 
