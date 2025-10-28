@@ -8,7 +8,7 @@ import Image from "next/image";
 export default function AppleRewardPage() {
   // Put the affiliate base here (must end with &s1=)
   const BASE_DEST_URL =
-    "https://uplevelrewarded.com/aff_c?offer_id=1701&aff_id=11848/?s1=";
+    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848/?s1=";
 
   // == SAME LOGIC: slug + query → s1 (supports bare queries like ?thisisworkign) ==
   const handleCTA = useCallback(() => {
