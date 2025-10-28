@@ -7,7 +7,7 @@ import Image from "next/image";
 
 export default function AppleRewardPage() {
   const BASE_DEST_URL =
-    "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&source=";
+    "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -20,7 +20,6 @@ export default function AppleRewardPage() {
 
     // Append rawSearch to BASE_DEST_URL directly
     const destUrl = `${BASE_DEST_URL}${rawSearch}`;
-
     window.location.href = destUrl;
   }, []);
 
