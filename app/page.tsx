@@ -1,85 +1,150 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import Head from "next/head";
 import Script from "next/script";
 import Image from "next/image";
 
+declare global {
+  type TTQMethod = (...args: unknown[]) => void;
+  interface TTQ {
+    track: (
+      eventName: string,
+      params?: Record<string, unknown>,
+      options?: { event_id?: string }
+    ) => void;
+    page: TTQMethod;
+    identify?: TTQMethod;
+    instances?: TTQMethod;
+    debug?: TTQMethod;
+    on?: TTQMethod;
+    off?: TTQMethod;
+    once?: TTQMethod;
+    ready?: TTQMethod;
+    alias?: TTQMethod;
+    group?: TTQMethod;
+    enableCookie?: TTQMethod;
+    disableCookie?: TTQMethod;
+    holdConsent?: TTQMethod;
+    revokeConsent?: TTQMethod;
+    grantConsent?: TTQMethod;
+  }
+  interface Window { ttq?: TTQ }
+}
+
 export default function AppleRewardPage() {
+  // ——— config ———
   const BASE_DEST_URL =
     "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
+  const TIKTOK_PIXEL_IDS = ["D40E20JC77U8M91303PG"];
+
+  // ——— helpers ———
+  const makeEventId = (prefix: string) =>
+    `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+
+  /** Extract your custom source from the URL:
+   *  - supports "?mySource&ttclid=..."  (bare token)
+   *  - supports "?source=mySource&ttclid=..."
+   *  - skips ttclid and empty keys
+   */
+  const extractSource = (): string => {
+    const raw = window.location.search.replace(/^\?/, "");
+    if (!raw) return "";
+
+    const parts = raw.split("&").filter(Boolean);
+    for (const part of parts) {
+      // "key=value" or possibly just "token"
+      const [k, v] = part.split("=");
+      const key = (k ?? "").trim();
+
+      // skip ttclid
+      if (key.toLowerCase() === "ttclid") continue;
+
+      // if there is a value, prefer it; otherwise use the token itself
+      if (typeof v === "string" && v.length) return decodeURIComponent(v);
+      if (key.length) return decodeURIComponent(key);
+    }
+    return "";
+  };
+
+  // ——— pixel events ———
+  useEffect(() => {
+    // Fire ViewContent reliably (retry until ttq exists)
+    const fireVC = () => {
+      if (window.ttq) {
+        window.ttq.track("ViewContent", {
+          content_type: "product",
+          content_id: "apple-lander",
+          currency: "USD",
+          value: 0,
+        });
+      } else {
+        setTimeout(fireVC, 50);
+      }
+    };
+    fireVC();
+  }, []);
+
+  // ——— CTA: ATC then redirect with only your source ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    // Get everything after the question mark in the current URL (i.e., the query string without '?')
-    const rawSearch = window.location.search.startsWith("?")
-      ? window.location.search.slice(1)
-      : window.location.search;
+    try {
+      const eventId = makeEventId("atc");
+      window.ttq?.track(
+        "AddToCart",
+        {
+          content_type: "product",
+          content_id: "apple-gc-750",
+          value: 0.5,
+          currency: "USD",
+        },
+        { event_id: eventId }
+      );
+    } catch {}
 
+    const source = extractSource();
+    const destUrl = source
+      ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
+      : BASE_DEST_URL;
 
-    // Append rawSearch to BASE_DEST_URL directly
-    const destUrl = `${BASE_DEST_URL}${rawSearch}`;
-    window.location.href = destUrl;
-  }, []);
+    // small delay improves event delivery before navigation
+    setTimeout(() => (window.location.href = destUrl), 400);
+  }, [BASE_DEST_URL]);
 
   return (
     <>
       <Head>
         <title>Apple Reward</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+        />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="format-detection" content="telephone=no" />
       </Head>
 
-      {/* TikTok Pixel #1 */}
-      <Script id="ttq-init-1" strategy="afterInteractive">
+      {/* TikTok Pixel loader (supports 1 or multiple IDs) */}
+      <Script id="ttq-init" strategy="afterInteractive">
         {`
-          !function (w, d, t) {
-            w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
-            ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],
-            ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};
-            for(var i=0;i<ttq.methods.length;i++) ttq.setAndDefer(ttq,ttq.methods[i]);
-            ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++) ttq.setAndDefer(e,ttq.methods[n]); return e};
-            ttq.load=function(e,n){
-              var r="https://analytics.tiktok.com/i18n/pixel/events.js";
-              ttq._i=ttq._i||{}, ttq._i[e]=[], ttq._i[e]._u=r, ttq._t=ttq._t||{}, ttq._t[e]=+new Date, ttq._o=ttq._o||{}, ttq._o[e]=n||{};
-              n=document.createElement("script"); n.type="text/javascript"; n.async=!0; n.src=r+"?sdkid="+e+"&lib="+t;
-              e=document.getElementsByTagName("script")[0]; e.parentNode.insertBefore(n,e)
-            };
-            ttq.load('D3QQT1RC77U53GBVR1V0'); ttq.page();
-          }(window, document, 'ttq');
-        `}
-      </Script>
-
-      {/* TikTok Pixel #2 */}
-      <Script id="ttq-init-2" strategy="afterInteractive">
-        {`
-          :root {
-            --apple-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-                          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji",
-                          "Segoe UI Symbol", sans-serif;
-          }
-          html, body {
-            font-family: var(--apple-stack);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-          !function (w, d, t) {
-            w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
-            ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],
-            ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};
-            for(var i=0;i<ttq.methods.length;i++) ttq.setAndDefer(ttq,ttq.methods[i]);
-            ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++) ttq.setAndDefer(e,ttq.methods[n]); return e};
-            ttq.load=function(e,n){
-              var r="https://analytics.tiktok.com/i18n/pixel/events.js";
-              ttq._i=ttq._i||{}, ttq._i[e]=[], ttq._i[e]._u=r, ttq._t=ttq._t||{}, ttq._t[e]=+new Date, ttq._o=ttq._o||{}, ttq._o[e]=n||{};
-              n=document.createElement("script"); n.type="text/javascript"; n.async=!0; n.src=r+"?sdkid="+e+"&lib="+t;
-              e=document.getElementsByTagName("script")[0]; e.parentNode.insertBefore(n,e)
-            };
-            ttq.load('D3Q0HCRC77UD1HDJ9EKG'); ttq.page();
-          }(window, document, 'ttq');
+!function (w, d, t) {
+  w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];
+  ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"];
+  ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat([].slice.call(arguments,0)))}};
+  for (var i=0;i<ttq.methods.length;i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+  ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++) ttq.setAndDefer(e,ttq.methods[n]); return e};
+  ttq.load=function(e,n){
+    var r="https://analytics.tiktok.com/i18n/pixel/events.js";
+    ttq._i=ttq._i||{}, ttq._i[e]=[], ttq._i[e]._u=r, ttq._t=ttq._t||{}, ttq._t[e]=+new Date, ttq._o=ttq._o||{}, ttq._o[e]=n||{};
+    n=d.createElement("script"); n.type="text/javascript"; n.async=!0; n.src=r+"?sdkid="+e+"&lib="+t;
+    var s=d.getElementsByTagName("script")[0]; s.parentNode.insertBefore(n,s);
+  };
+  // Load all your pixel IDs:
+  ${TIKTOK_PIXEL_IDS.map(id => `ttq.load('${id}');`).join("\n  ")}
+  ttq.page();
+}(window, document, 'ttq');
         `}
       </Script>
 
@@ -99,7 +164,6 @@ export default function AppleRewardPage() {
           <p className="subtitle">Complete 3 simple steps to claim your reward</p>
 
           <div className="steps">
-            {/* Step 1 */}
             <div className="step">
               <div className="icon-circle blue">
                 <svg className="icon blue" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -112,7 +176,6 @@ export default function AppleRewardPage() {
               <p>Quick registration with just your name and email address</p>
             </div>
 
-            {/* Step 2 */}
             <div className="step">
               <div className="icon-circle green">
                 <svg className="icon green" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -125,7 +188,6 @@ export default function AppleRewardPage() {
               <p>Answer a few questions about your shopping preferences</p>
             </div>
 
-            {/* Step 3 */}
             <div className="step">
               <div className="icon-circle yellow">
                 <svg className="icon yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -139,12 +201,10 @@ export default function AppleRewardPage() {
             </div>
           </div>
 
-          {/* CTA Button */}
           <button className="cta-button" onClick={handleCTA}>
             Claim Your Apple Reward
           </button>
 
-          {/* Footer Links */}
           <div className="footer-links">
             <a href="#">Terms of Use</a>
             <a href="#">Privacy Policy</a>
@@ -153,7 +213,6 @@ export default function AppleRewardPage() {
         </main>
       </div>
 
-      {/* Styles */}
       <style jsx>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
