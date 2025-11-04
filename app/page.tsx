@@ -37,7 +37,7 @@ export default function AppleRewardPage() {
   const BASE_DEST_URL =
     "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
-  const TIKTOK_PIXEL_IDS = ["D40OCMRC77U53GC03IJ0"];
+  const TIKTOK_PIXEL_IDS = ["D40E2VRC77UD89P2K3TG"];
 
   // ——— helpers ———
   const makeEventId = (prefix: string) =>
