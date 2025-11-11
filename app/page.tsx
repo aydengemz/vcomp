@@ -89,29 +89,43 @@ export default function AppleRewardPage() {
   // ——— CTA: ATC then redirect with only your source ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
-
+  
     try {
-      const eventId = makeEventId("atc");
+      // Fire AddToCart event
+      const atcEventId = makeEventId("atc");
       window.ttq?.track(
         "AddToCart",
         {
           content_type: "product",
           content_id: "apple-gc-750",
-          value: 0.5,
+          value: 0,
           currency: "USD",
         },
-        { event_id: eventId }
+        { event_id: atcEventId }
       );
-    } catch {}
 
+      const formEventId = makeEventId("submitform");
+      window.ttq?.track(
+        "SubmitForm",
+        {
+          form_name: "apple_reward_cta",
+          content_category: "lead",
+        },
+        { event_id: formEventId }
+      );
+    } catch (err) {
+      console.warn("CTA tracking error:", err);
+    }
+  
+    // Redirect after short delay
     const source = extractSource();
     const destUrl = source
       ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
       : BASE_DEST_URL;
-
-    // small delay improves event delivery before navigation
+  
     setTimeout(() => (window.location.href = destUrl), 400);
   }, [BASE_DEST_URL]);
+  
 
   return (
     <>
