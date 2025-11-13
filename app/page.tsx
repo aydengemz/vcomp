@@ -29,6 +29,7 @@ declare global {
     revokeConsent?: TTQMethod;
     grantConsent?: TTQMethod;
   }
+
   interface ParticlesJSConfig {
     particles?: {
       number?: { value: number; density?: { enable: boolean; value_area: number } };
@@ -62,9 +63,7 @@ declare global {
 }
 
 const TIKTOK_PIXEL_IDS = [
-  "D40E2VRC77UD89P2K3TG",
-  "D40OCMRC77U53GC03IJ0",
-  "D43SLAJC77UER98133U0",
+  "D4AP363C77U6M9K6S7TG"
 ];
 
 const NAMES = [
@@ -80,16 +79,14 @@ const NAMES = [
   "Taylor G.",
 ];
 
+// affiliate base
+const BASE_DEST_URL =
+  "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
+
 export default function AppleRewardPage() {
-  // ——— config ———
-  const BASE_DEST_URL =
-    "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
-
   // ——— helpers ———
-  const makeEventId = (prefix: string) =>
-    `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
-
   const extractSource = (): string => {
+    if (typeof window === "undefined") return "";
     const raw = window.location.search.replace(/^\?/, "");
     if (!raw) return "";
 
@@ -104,6 +101,16 @@ export default function AppleRewardPage() {
       if (key.length) return decodeURIComponent(key);
     }
     return "";
+  };
+
+  const getTtclid = (): string => {
+    if (typeof window === "undefined") return "";
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get("ttclid") || "";
+    } catch {
+      return "";
+    }
   };
 
   // ——— state for “New Order” notifications ———
@@ -135,7 +142,7 @@ export default function AppleRewardPage() {
     };
   }, []);
 
-  // ——— pixel events ———
+  // ——— pixel: ViewContent on load ———
   useEffect(() => {
     const fireVC = () => {
       if (window.ttq) {
@@ -152,34 +159,101 @@ export default function AppleRewardPage() {
     fireVC();
   }, []);
 
-  // ——— CTA: ATC + SubmitForm then redirect ———
+  // ——— A. Client-side fallback events (3 hits on load) ———
+  useEffect(() => {
+    const fireFallbackEvents = () => {
+      if (!window.ttq) {
+        setTimeout(fireFallbackEvents, 50);
+        return;
+      }
+
+      const baseProps = {
+        content_id: "cash-rewards-750",
+        content_type: "reward",
+        value: 0.5,
+        currency: "USD",
+        contents: [{ content_id: "cash-rewards-750", quantity: 1 }],
+      };
+
+      // Fallback client events
+      window.ttq.track("AddToCart", baseProps);
+      window.ttq.track("Purchase", baseProps);
+      window.ttq.track("SubmitForm", {
+        content_id: "cash-rewards-lead",
+        content_type: "lead",
+        value: 0.5,
+        currency: "USD",
+      });
+    };
+
+    fireFallbackEvents();
+  }, []);
+
+  // ——— B. Server-side tracking helper ———
+  const trackServerSideEvent = useCallback(
+    (
+      eventType: "AddToCart" | "Purchase" | "SubmitForm",
+      properties: Record<string, unknown>
+    ) => {
+      if (typeof window === "undefined") {
+        return Promise.resolve();
+      }
+
+      const pageUrl = window.location.href;
+      const referrer = document.referrer || "";
+      const ttclid = getTtclid();
+
+      const payload = {
+        event_type: eventType,
+        properties,
+        page_url: pageUrl,
+        referrer,
+        ttclid,
+        user_data: {
+          user_agent:
+            typeof navigator !== "undefined" ? navigator.userAgent : "",
+        },
+      };
+
+      return fetch("/track-tiktok-event.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch((err) => {
+        console.warn("Server-side TikTok tracking error:", err);
+      });
+    },
+    []
+  );
+
+  // ——— CTA: server-side events (primary) then redirect after 500ms ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    try {
-      const atcEventId = makeEventId("atc");
-      window.ttq?.track(
-        "AddToCart",
-        {
-          content_type: "product",
-          content_id: "apple-gc-750",
-          value: 0,
-          currency: "USD",
-        },
-        { event_id: atcEventId }
-      );
+    const baseProps = {
+      content_id: "cash-rewards-750",
+      content_type: "reward",
+      value: 0.5,
+      currency: "USD",
+      contents: [{ content_id: "cash-rewards-750", quantity: 1 }],
+    };
 
-      const formEventId = makeEventId("submitform");
-      window.ttq?.track(
-        "SubmitForm",
-        {
-          form_name: "apple_reward_cta",
-          content_category: "lead",
-        },
-        { event_id: formEventId }
-      );
+    const submitProps = {
+      content_id: "cash-rewards-lead",
+      content_type: "lead",
+      value: 0.5,
+      currency: "USD",
+    };
+
+    try {
+      Promise.all([
+        trackServerSideEvent("AddToCart", baseProps),
+        trackServerSideEvent("Purchase", baseProps),
+        trackServerSideEvent("SubmitForm", submitProps),
+      ]).catch((err) => console.warn("Promise.all TTQ error:", err));
     } catch (err) {
-      console.warn("CTA tracking error:", err);
+      console.warn("CTA server-side tracking error:", err);
     }
 
     const source = extractSource();
@@ -189,8 +263,8 @@ export default function AppleRewardPage() {
 
     setTimeout(() => {
       window.location.href = destUrl;
-    }, 400);
-  }, [BASE_DEST_URL]);
+    }, 500);
+  }, [trackServerSideEvent]);
 
   return (
     <>
