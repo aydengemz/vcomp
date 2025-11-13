@@ -62,9 +62,7 @@ declare global {
   }
 }
 
-const TIKTOK_PIXEL_IDS = [
-  "D4AP363C77U6M9K6S7TG"
-];
+const TIKTOK_PIXEL_IDS = ["D4AP363C77U6M9K6S7TG"];
 
 const NAMES = [
   "John D.",
@@ -83,6 +81,9 @@ const NAMES = [
 const BASE_DEST_URL =
   "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
+// simple client-side event_id helper
+const generateEventId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 export default function AppleRewardPage() {
   // ——— helpers ———
@@ -125,8 +126,7 @@ export default function AppleRewardPage() {
       const id = `${name}-${Date.now()}`;
       setNotifications((prev) => [...prev, { id, name }]);
       setTimeout(
-        () =>
-          setNotifications((prev) => prev.filter((n) => n.id !== id)),
+        () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
         5000
       );
     };
@@ -143,7 +143,7 @@ export default function AppleRewardPage() {
     };
   }, []);
 
-  // ——— pixel: ViewContent on load ———
+  // ——— pixel: ViewContent on load (browser only) ———
   useEffect(() => {
     const fireVC = () => {
       if (typeof window === "undefined" || !window.ttq) {
@@ -152,13 +152,15 @@ export default function AppleRewardPage() {
       }
       window.ttq.track("ViewContent", {
         content_type: "product",
-        content_id: "apple-bonus-1000",   // ⭐ CHANGED: make consistent
+        content_id: "apple-bonus-1000",
+        value: 0.5,
+        currency: "USD",
       });
     };
     fireVC();
   }, []);
 
-  // ——— A. Client-side events on load (lightweight) ———
+  // ——— Light AddToCart signal on load (browser only) ———
   useEffect(() => {
     const fireOnLoadEvents = () => {
       if (typeof window === "undefined" || !window.ttq) {
@@ -167,89 +169,88 @@ export default function AppleRewardPage() {
       }
 
       const baseProps = {
-        content_id: "apple-bonus-1000",   // ⭐ CHANGED: consistent ID
+        content_id: "apple-bonus-1000",
         content_type: "product",
         value: 0.5,
         currency: "USD",
         contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
       };
 
-      // ⭐ CHANGED: only fire AddToCart on load, NOT Purchase/SubmitForm
       window.ttq.track("AddToCart", baseProps);
     };
 
     fireOnLoadEvents();
   }, []);
 
-  // ——— B. Server-side tracking helper ———
+  // ——— B. Server-side tracking helper (calls Next.js API route) ———
   const trackServerSideEvent = useCallback(
-    (
+    async (
       eventType: "AddToCart" | "Purchase",
-      properties: Record<string, unknown>
+      properties: Record<string, unknown>,
+      eventId?: string
     ) => {
-      if (typeof window === "undefined") {
-        return Promise.resolve();
-      }
+      if (typeof window === "undefined") return;
 
       const pageUrl = window.location.href;
       const referrer = document.referrer || "";
       const ttclid = getTtclid();
 
-      const payload = {
-        event_type: eventType,
-        properties,
-        page_url: pageUrl,
-        referrer,
-        ttclid,
-        user_data: {
-          user_agent:
-            typeof navigator !== "undefined" ? navigator.userAgent : "",
-        },
-        // event_id: generateEventId(), // optional if you later want dedupe
-      };
-
-      return fetch("/track-tiktok-event.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      }).catch((err) => {
+      try {
+        await fetch("/api/tiktok-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: eventType,
+            event_id: eventId,
+            properties,
+            page_url: pageUrl,
+            referrer,
+            ttclid,
+          }),
+          keepalive: true,
+        });
+      } catch (err) {
         console.warn("Server-side TikTok tracking error:", err);
-      });
+      }
     },
     []
   );
 
-  // ——— CTA: server-side events (primary) then redirect after 500ms ———
+  // ——— CTA: server-side AddToCart + Purchase, then redirect ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
+    const eventId = generateEventId();
+
     const baseProps = {
-      content_id: "apple-bonus-1000",     // ⭐ CHANGED: match UI
+      content_id: "apple-bonus-1000",
       content_type: "product",
       value: 0.5,
       currency: "USD",
       contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
     };
 
-    try {
-      // ⭐ CHANGED: only server AddToCart + Purchase here
-      Promise.all([
-        trackServerSideEvent("AddToCart", baseProps),
-        trackServerSideEvent("Purchase", baseProps),
-      ]).catch((err) => console.warn("Promise.all TTQ error:", err));
-    } catch (err) {
-      console.warn("CTA server-side tracking error:", err);
+    // (Optional) also send client-side Purchase for redundancy, with same event_id
+    if (window.ttq) {
+      window.ttq.track("Purchase", baseProps, { event_id: eventId });
     }
+
+    const trackingPromise = Promise.all([
+      trackServerSideEvent("AddToCart", baseProps, eventId),
+      trackServerSideEvent("Purchase", baseProps, eventId),
+    ]);
 
     const source = extractSource();
     const destUrl = source
       ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
       : BASE_DEST_URL;
 
-    setTimeout(() => {
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
+
+    // Wait for tracking OR 1.2s, then redirect
+    Promise.race([trackingPromise, timeoutPromise]).finally(() => {
       window.location.href = destUrl;
-    }, 500);
+    });
   }, [trackServerSideEvent]);
 
   return (
@@ -266,7 +267,7 @@ export default function AppleRewardPage() {
         <meta name="format-detection" content="telephone=no" />
       </Head>
 
-      {/* TikTok Pixel loader (multi-ID) */}
+      {/* TikTok Pixel loader (multi-ID ready) */}
       <Script id="ttq-init" strategy="afterInteractive">
         {`
 !function (w, d, t) {
