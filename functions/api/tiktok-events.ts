@@ -3,6 +3,8 @@
 export interface Env {
     TIKTOK_PIXEL_ID: string;
     TIKTOK_ACCESS_TOKEN: string;
+    // optional while debugging
+    TIKTOK_TEST_EVENT_CODE?: string;
   }
   
   export const onRequestPost = async (context: { request: Request; env: Env }) => {
@@ -10,11 +12,15 @@ export interface Env {
   
     const pixelCode = env.TIKTOK_PIXEL_ID;
     const accessToken = env.TIKTOK_ACCESS_TOKEN;
+    const testEventCode = env.TIKTOK_TEST_EVENT_CODE;
   
     if (!pixelCode || !accessToken) {
       return new Response(
         JSON.stringify({ error: "Missing TikTok secrets" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
   
@@ -32,8 +38,11 @@ export interface Env {
   
     if (!event || !properties) {
       return new Response(
-        JSON.stringify({ error: "Missing event or properties" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Missing event or properties", body }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
   
@@ -44,10 +53,10 @@ export interface Env {
   
     const userAgent = request.headers.get("user-agent") || "";
   
-    const tikTokPayload = {
+    const tikTokPayload: any = {
       pixel_code: pixelCode,
       event,
-      // you said you DON'T want dedupe → event_id is optional/ignored
+      // you said you *don’t* want dedupe, so this is optional
       event_id: event_id || undefined,
       timestamp: new Date().toISOString(),
       context: {
@@ -65,7 +74,12 @@ export interface Env {
       properties,
     };
   
-    const res = await fetch(
+    // Optional: if you set TIKTOK_TEST_EVENT_CODE, events show in Test Events
+    if (testEventCode) {
+      tikTokPayload.test_event_code = testEventCode;
+    }
+  
+    const tikTokRes = await fetch(
       "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
       {
         method: "POST",
@@ -77,23 +91,39 @@ export interface Env {
       }
     );
   
-    const data = await res.json().catch(() => ({}));
-  
-    if (!res.ok || (data && data.code && data.code !== 0)) {
-      console.error("TikTok Events API error:", { status: res.status, data });
-      return new Response(JSON.stringify({ error: "TikTok API error", details: data }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    let tikTokData: any = null;
+    try {
+      tikTokData = await tikTokRes.json();
+    } catch {
+      // no-op
     }
   
-    return new Response(JSON.stringify({ success: true, data }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    const ok = tikTokRes.ok && tikTokData && tikTokData.code === 0;
+  
+    if (!ok) {
+      // This is what you care about when debugging
+      return new Response(
+        JSON.stringify({
+          success: false,
+          status: tikTokRes.status,
+          tikTokData,
+          sentPayload: tikTokPayload,
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  
+    return new Response(
+      JSON.stringify({
+        success: true,
+        status: tikTokRes.status,
+        tikTokData,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   };
   
-  // Optional: handle GET so /api/tiktok-events works in the browser too
+  // Keep GET for quick browser check
   export const onRequestGet = async () =>
     new Response("TikTok events endpoint OK", {
       status: 200,
