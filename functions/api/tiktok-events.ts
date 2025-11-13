@@ -3,8 +3,7 @@
 export interface Env {
     TIKTOK_PIXEL_ID: string;
     TIKTOK_ACCESS_TOKEN: string;
-    // optional while debugging
-    TIKTOK_TEST_EVENT_CODE?: string;
+    TIKTOK_TEST_EVENT_CODE?: string; // 👈 new
   }
   
   export const onRequestPost = async (context: { request: Request; env: Env }) => {
@@ -12,16 +11,13 @@ export interface Env {
   
     const pixelCode = env.TIKTOK_PIXEL_ID;
     const accessToken = env.TIKTOK_ACCESS_TOKEN;
-    const testEventCode = env.TIKTOK_TEST_EVENT_CODE;
+    const testEventCode = env.TIKTOK_TEST_EVENT_CODE; // 👈
   
     if (!pixelCode || !accessToken) {
-      return new Response(
-        JSON.stringify({ error: "Missing TikTok secrets" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Missing TikTok secrets" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   
     let body: any;
@@ -56,8 +52,7 @@ export interface Env {
     const tikTokPayload: any = {
       pixel_code: pixelCode,
       event,
-      // you said you *don’t* want dedupe, so this is optional
-      event_id: event_id || undefined,
+      event_id: event_id || undefined, // you’re fine not using dedupe
       timestamp: new Date().toISOString(),
       context: {
         page: {
@@ -74,7 +69,7 @@ export interface Env {
       properties,
     };
   
-    // Optional: if you set TIKTOK_TEST_EVENT_CODE, events show in Test Events
+    // 👇 THIS is what makes Events API show up in Test Events
     if (testEventCode) {
       tikTokPayload.test_event_code = testEventCode;
     }
@@ -95,13 +90,12 @@ export interface Env {
     try {
       tikTokData = await tikTokRes.json();
     } catch {
-      // no-op
+      // ignore parse error
     }
   
     const ok = tikTokRes.ok && tikTokData && tikTokData.code === 0;
   
     if (!ok) {
-      // This is what you care about when debugging
       return new Response(
         JSON.stringify({
           success: false,
@@ -109,7 +103,10 @@ export interface Env {
           tikTokData,
           sentPayload: tikTokPayload,
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
   
@@ -119,11 +116,13 @@ export interface Env {
         status: tikTokRes.status,
         tikTokData,
       }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   };
   
-  // Keep GET for quick browser check
   export const onRequestGet = async () =>
     new Response("TikTok events endpoint OK", {
       status: 200,
