@@ -182,84 +182,76 @@ export default function AppleRewardPage() {
     fireOnLoadEvents();
   }, []);
 
-// --- B. Server-side tracking helper ---
-const trackServerSideEvent = useCallback(
-  async (
-    eventType: "AddToCart" | "Purchase",
-    properties: Record<string, unknown>,
-    eventId?: string
-  ) => {
+  // ——— B. Server-side tracking helper (calls Next.js API route) ———
+  const trackServerSideEvent = useCallback(
+    async (
+      eventType: "AddToCart" | "Purchase",
+      properties: Record<string, unknown>,
+      eventId?: string
+    ) => {
+      if (typeof window === "undefined") return;
+
+      const pageUrl = window.location.href;
+      const referrer = document.referrer || "";
+      const ttclid = getTtclid();
+
+      try {
+        await fetch("/api/tiktok-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: eventType,
+            event_id: eventId,
+            properties,
+            page_url: pageUrl,
+            referrer,
+            ttclid,
+          }),
+          keepalive: true,
+        });
+      } catch (err) {
+        console.warn("Server-side TikTok tracking error:", err);
+      }
+    },
+    []
+  );
+
+  // ——— CTA: server-side AddToCart + Purchase, then redirect ———
+  const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const pageUrl = window.location.href;
-    const referrer = document.referrer || "";
-    const ttclid = getTtclid();
+    const eventId = generateEventId();
 
-    const payload = {
-      event: eventType,
-      event_id: eventId,
-      properties,
-      page_url: pageUrl,
-      referrer,
-      ttclid,
+    const baseProps = {
+      content_id: "apple-bonus-1000",
+      content_type: "product",
+      value: 0.5,
+      currency: "USD",
+      contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
     };
 
-    console.log("[TTQ] calling /api/tiktok-events", payload);
-
-    try {
-      const res = await fetch("/api/tiktok-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      });
-      console.log("[TTQ] /api/tiktok-events response", res.status);
-    } catch (err) {
-      console.warn("Server-side TikTok tracking error:", err);
+    // (Optional) also send client-side Purchase for redundancy, with same event_id
+    if (window.ttq) {
+      window.ttq.track("Purchase", baseProps, { event_id: eventId });
     }
-  },
-  []
-);
 
-// --- CTA handler ---
-const handleCTA = useCallback(() => {
-  if (typeof window === "undefined") return;
+    const trackingPromise = Promise.all([
+      trackServerSideEvent("AddToCart", baseProps, eventId),
+      trackServerSideEvent("Purchase", baseProps, eventId),
+    ]);
 
-  console.log("[TTQ] CTA clicked");
+    const source = extractSource();
+    const destUrl = source
+      ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
+      : BASE_DEST_URL;
 
-  const eventId = generateEventId();
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
 
-  const baseProps = {
-    content_id: "apple-bonus-1000",
-    content_type: "product",
-    value: 0.5,
-    currency: "USD",
-    contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
-  };
-
-  if (window.ttq) {
-    console.log("[TTQ] firing browser Purchase", { eventId, baseProps });
-    window.ttq.track("Purchase", baseProps, { event_id: eventId });
-  }
-
-  const trackingPromise = Promise.all([
-    trackServerSideEvent("AddToCart", baseProps, eventId),
-    trackServerSideEvent("Purchase", baseProps, eventId),
-  ]);
-
-  const source = extractSource();
-  const destUrl = source
-    ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
-    : BASE_DEST_URL;
-
-  const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
-
-  Promise.race([trackingPromise, timeoutPromise]).finally(() => {
-    console.log("[TTQ] redirecting to", destUrl);
-    window.location.href = destUrl;
-  });
-}, [trackServerSideEvent]);
-
+    // Wait for tracking OR 1.2s, then redirect
+    Promise.race([trackingPromise, timeoutPromise]).finally(() => {
+      window.location.href = destUrl;
+    });
+  }, [trackServerSideEvent]);
 
   return (
     <>
