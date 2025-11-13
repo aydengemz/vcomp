@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import Script from "next/script";
 import Image from "next/image";
@@ -29,48 +29,88 @@ declare global {
     revokeConsent?: TTQMethod;
     grantConsent?: TTQMethod;
   }
-  interface Window { ttq?: TTQ }
+  interface Window {
+    ttq?: TTQ;
+    particlesJS?: any;
+  }
 }
+
+const TIKTOK_PIXEL_IDS = [
+  "D40E2VRC77UD89P2K3TG",
+  "D40OCMRC77U53GC03IJ0",
+  "D43SLAJC77UER98133U0",
+];
+
+const NAMES = [
+  "John D.",
+  "Sarah M.",
+  "David L.",
+  "Emma W.",
+  "Michael R.",
+  "Jessica K.",
+  "Chris P.",
+  "Amanda S.",
+  "Ryan L.",
+  "Taylor G.",
+];
 
 export default function AppleRewardPage() {
   // ——— config ———
   const BASE_DEST_URL =
     "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
-  const TIKTOK_PIXEL_IDS = ["D40E2VRC77UD89P2K3TG, D40OCMRC77U53GC03IJ0, D43SLAJC77UER98133U0"];
-
   // ——— helpers ———
   const makeEventId = (prefix: string) =>
     `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 
-  /** Extract your custom source from the URL:
-   *  - supports "?mySource&ttclid=..."  (bare token)
-   *  - supports "?source=mySource&ttclid=..."
-   *  - skips ttclid and empty keys
-   */
   const extractSource = (): string => {
     const raw = window.location.search.replace(/^\?/, "");
     if (!raw) return "";
 
     const parts = raw.split("&").filter(Boolean);
     for (const part of parts) {
-      // "key=value" or possibly just "token"
       const [k, v] = part.split("=");
       const key = (k ?? "").trim();
 
-      // skip ttclid
       if (key.toLowerCase() === "ttclid") continue;
 
-      // if there is a value, prefer it; otherwise use the token itself
       if (typeof v === "string" && v.length) return decodeURIComponent(v);
       if (key.length) return decodeURIComponent(key);
     }
     return "";
   };
 
+  // ——— state for “New Order” notifications ———
+  const [notifications, setNotifications] = useState<
+    { id: string; name: string }[]
+  >([]);
+
+  useEffect(() => {
+    const createNotification = () => {
+      const name = NAMES[Math.floor(Math.random() * NAMES.length)];
+      const id = `${name}-${Date.now()}`;
+      setNotifications((prev) => [...prev, { id, name }]);
+      setTimeout(
+        () =>
+          setNotifications((prev) => prev.filter((n) => n.id !== id)),
+        5000
+      );
+    };
+
+    const first = setTimeout(createNotification, 2000);
+    const interval = setInterval(
+      createNotification,
+      Math.random() * 4000 + 8000
+    );
+
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
+  }, []);
+
   // ——— pixel events ———
   useEffect(() => {
-    // Fire ViewContent reliably (retry until ttq exists)
     const fireVC = () => {
       if (window.ttq) {
         window.ttq.track("ViewContent", {
@@ -86,12 +126,11 @@ export default function AppleRewardPage() {
     fireVC();
   }, []);
 
-  // ——— CTA: ATC then redirect with only your source ———
+  // ——— CTA: ATC + SubmitForm then redirect ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
-  
+
     try {
-      // Fire AddToCart event
       const atcEventId = makeEventId("atc");
       window.ttq?.track(
         "AddToCart",
@@ -116,21 +155,22 @@ export default function AppleRewardPage() {
     } catch (err) {
       console.warn("CTA tracking error:", err);
     }
-  
-    // Redirect after short delay
+
     const source = extractSource();
     const destUrl = source
       ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
       : BASE_DEST_URL;
-  
-    setTimeout(() => (window.location.href = destUrl), 400);
+
+    setTimeout(() => {
+      window.location.href = destUrl;
+    }, 400);
   }, [BASE_DEST_URL]);
-  
 
   return (
     <>
       <Head>
-        <title>Apple Reward</title>
+        <title>Apple Pay</title>
+        <meta charSet="UTF-8" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
@@ -140,7 +180,7 @@ export default function AppleRewardPage() {
         <meta name="format-detection" content="telephone=no" />
       </Head>
 
-      {/* TikTok Pixel loader (supports 1 or multiple IDs) */}
+      {/* TikTok Pixel loader (multi-ID) */}
       <Script id="ttq-init" strategy="afterInteractive">
         {`
 !function (w, d, t) {
@@ -155,132 +195,108 @@ export default function AppleRewardPage() {
     n=d.createElement("script"); n.type="text/javascript"; n.async=!0; n.src=r+"?sdkid="+e+"&lib="+t;
     var s=d.getElementsByTagName("script")[0]; s.parentNode.insertBefore(n,s);
   };
-  // Load all your pixel IDs:
-  ${TIKTOK_PIXEL_IDS.map(id => `ttq.load('${id}');`).join("\n  ")}
+
+  ${TIKTOK_PIXEL_IDS.map((id) => `ttq.load('${id}');`).join("\n  ")}
   ttq.page();
 }(window, document, 'ttq');
         `}
       </Script>
 
-      <div className="container">
-        {/* Logo */}
-        <div className="logo-section">
-          <Image src="/applelogo1.png" alt="Apple Logo" width={32} height={32} className="logo" />
+      {/* particles.js script – put particles.min.js in /public/js */}
+      <Script src="/js/particles.min.js" strategy="afterInteractive" />
+      <Script id="particles-init" strategy="afterInteractive">
+        {`
+if (window.particlesJS) {
+  window.particlesJS('particles-js', {
+    particles: {
+      number: { value: 80, density: { enable: true, value_area: 800 } },
+      color: { value: '#1d1d1f' },
+      shape: { type: 'circle' },
+      opacity: { value: 0.5 },
+      size: { value: 3, random: true },
+      line_linked: {
+        enable: true,
+        distance: 150,
+        color: '#1d1d1f',
+        opacity: 0.4,
+        width: 1
+      },
+      move: { enable: true, speed: 6 }
+    },
+    interactivity: {
+      events: {
+        onhover: { enable: true, mode: 'repulse' },
+        onclick: { enable: true, mode: 'push' },
+        resize: true
+      }
+    },
+    retina_detect: true
+  });
+}
+        `}
+      </Script>
+
+      {/* Background particles layer */}
+      <div id="particles-js" className="particles-bg" />
+
+      {/* Notifications */}
+      {notifications.map((n) => (
+        <div key={n.id} className="notification show">
+          <div className="notification-icon">📱</div>
+          <div>
+            <b>New Order</b>
+            <div>{n.name} claimed $750!</div>
+          </div>
         </div>
+      ))}
 
-        {/* Main Content */}
-        <main>
-          <h1>
-            Get Your $750
-            <br />
-            Apple Gift Card
-          </h1>
-          <p className="subtitle">Complete 3 simple steps to claim your reward</p>
+      {/* Main card */}
+      <div className="page-container">
+        <div className="reward-card">
+          <div className="app-logo-container">
+            <Image
+              src="/applogo1.jpg" // ensure this exists in /public
+              alt="Apple Logo"
+              width={130}
+              height={130}
+              className="app-logo"
+            />
+            <div className="cash-text">APPLE BONUS</div>
+          </div>
 
-          <div className="steps">
-            <div className="step">
-              <div className="icon-circle blue">
-                <svg className="icon blue" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <h3>
-                Enter your <span className="highlight">basic info.</span>
-              </h3>
-              <p>Quick registration with just your name and email address</p>
+          <div id="amount" className="amount">
+            $1000
+          </div>
+          <div className="amount-subtext">deposited to you</div>
+
+          <div className="instructions-container">
+            <div className="instruction-item">
+              <span className="number">1</span>
+              <span>Click the Button Below</span>
             </div>
-
-            <div className="step">
-              <div className="icon-circle green">
-                <svg className="icon green" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3>
-                Complete a <span className="highlight">quick survey.</span>
-              </h3>
-              <p>Answer a few questions about your shopping preferences</p>
+            <div className="instruction-item">
+              <span className="number">2</span>
+              <span>Enter Details, Take a Quiz</span>
             </div>
-
-            <div className="step">
-              <div className="icon-circle yellow">
-                <svg className="icon yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                </svg>
-              </div>
-              <h3>
-                Select <span className="highlight">partner deals.</span>
-              </h3>
-              <p>Choose from recommended offers to maximize your reward</p>
+            <div className="instruction-item">
+              <span className="number">3</span>
+              <span>Complete Recommended Deals</span>
+            </div>
+            <div className="instruction-item">
+              <span className="number">4</span>
+              <span>Claim Reward &amp; Repeat</span>
             </div>
           </div>
 
-          <button className="cta-button" onClick={handleCTA}>
-            Claim Your Apple Reward
+          <button className="claim-button" onClick={handleCTA}>
+            Get Yours →
           </button>
 
-          <div className="footer-links">
-            <a href="#">Terms of Use</a>
-            <a href="#">Privacy Policy</a>
-            <a href="https://apple.com" target="_blank" rel="noreferrer">Apple.com</a>
+          <div className="tiny-note">
+            By continuing you accept our Terms &amp; Privacy.
           </div>
-        </main>
+        </div>
       </div>
-
-      <style jsx>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-          background-color: #f9fafb;
-          min-height: 100vh;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          -webkit-text-size-adjust: 100%;
-          touch-action: manipulation;
-        }
-        .container { min-height: 100vh; }
-        .logo-section { background-color: white; padding: 1rem 1.5rem; border-bottom: 1px solid #e5e7eb; }
-        .logo { width: 32px; height: 32px; }
-
-        main { padding: 2rem 1.5rem; max-width: 28rem; margin: 0 auto; }
-        h1 { font-size: 1.875rem; font-weight: 600; color: #111827; text-align: center; margin-bottom: 0.5rem; line-height: 1.25; }
-        .subtitle { font-size: 0.875rem; color: #4b5563; text-align: center; margin-bottom: 1.5rem; }
-
-        .steps { margin-bottom: 2rem; }
-        .step { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 1.5rem; }
-
-        .icon-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; }
-        .icon-circle.blue { background-color: #dbeafe; }
-        .icon-circle.green { background-color: #d1fae5; }
-        .icon-circle.yellow { background-color: #fef3c7; }
-
-        .icon { width: 24px; height: 24px; }
-        .icon.blue { color: #3b82f6; }
-        .icon.green { color: #10b981; }
-        .icon.yellow { color: #eab308; }
-
-        .step h3 { font-size: 1rem; font-weight: 500; color: #111827; margin-bottom: 0.25rem; }
-        .highlight { color: #3b82f6; }
-        .step p { font-size: 0.75rem; color: #6b7280; }
-
-        .cta-button {
-          width: 100%; background-color: #3b82f6; color: white; font-weight: 500; padding: 1rem;
-          border-radius: 0.5rem; border: none; cursor: pointer; transition: background-color 0.2s;
-          font-size: 1rem; margin-bottom: 1.5rem; -webkit-appearance: none; -webkit-tap-highlight-color: transparent;
-          touch-action: manipulation; user-select: none; -webkit-user-select: none;
-        }
-        .cta-button:hover { background-color: #2563eb; }
-        .cta-button:active { background-color: #1e40af; transform: scale(0.98); }
-
-        .footer-links { display: flex; justify-content: center; gap: 1.5rem; font-size: 0.75rem; color: #6b7280; }
-        .footer-links a { color: #6b7280; text-decoration: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-        .footer-links a:hover { color: #374151; }
-        .footer-links a:active { color: #111827; }
-
-        @supports (padding: max(0px)) {
-          main { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
-        }
-      `}</style>
     </>
   );
 }
