@@ -1,129 +1,94 @@
-// functions/api/tiktok-events.ts
+// app/api/tiktok-events/route.ts
+import { NextRequest, NextResponse } from "next/server";
 
-export interface Env {
-  TIKTOK_PIXEL_ID: string;
-  TIKTOK_ACCESS_TOKEN: string;
-  // TIKTOK_TEST_EVENT_CODE?: string; // ❌ not needed for prod
+const TIKTOK_PIXEL_CODE = process.env.TIKTOK_PIXEL_ID;
+const TIKTOK_ACCESS_TOKEN = process.env.TIKTOK_ACCESS_TOKEN;
+
+export async function POST(req: NextRequest) {
+  if (!TIKTOK_PIXEL_CODE || !TIKTOK_ACCESS_TOKEN) {
+    return NextResponse.json(
+      { error: "TikTok server config missing (pixel or access token)" },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const body = await req.json();
+
+    const {
+      event,          // "AddToCart" | "Purchase" etc.
+      event_id,       // optional
+      properties,     // your baseProps
+      page_url,
+      referrer,
+      ttclid,
+    } = body;
+
+    if (!event || !properties) {
+      return NextResponse.json(
+        { error: "Missing required fields: event or properties" },
+        { status: 400 }
+      );
+    }
+
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip")?.trim() ||
+      "";
+
+    const userAgent = req.headers.get("user-agent") || "";
+
+    const tikTokPayload = {
+      pixel_code: TIKTOK_PIXEL_CODE,
+      event,                            // e.g. "Purchase"
+      event_id: event_id || undefined,  // used for dedupe with browser
+      // ✅ FIX: TikTok wants a string timestamp
+      timestamp: new Date().toISOString(),
+      context: {
+        page: {
+          url: page_url,
+          referrer,
+        },
+        user: {
+          ip,
+          user_agent: userAgent,
+          ttclid,
+        },
+      },
+      properties, // content_id, value, currency, contents, etc.
+    };
+
+    const res = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": TIKTOK_ACCESS_TOKEN,
+        },
+        body: JSON.stringify(tikTokPayload),
+      }
+    );
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || (data && data.code && data.code !== 0)) {
+      console.error("TikTok Events API error", {
+        status: res.status,
+        data,
+      });
+      return NextResponse.json(
+        { error: "TikTok Events API error", details: data },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (err) {
+    console.error("Error in /api/tiktok-events:", err);
+    return NextResponse.json(
+      { error: "Invalid request payload" },
+      { status: 400 }
+    );
+  }
 }
-
-export const onRequestPost = async (context: { request: Request; env: Env }) => {
-  const { request, env } = context;
-
-  const pixelCode = env.TIKTOK_PIXEL_ID;
-  const accessToken = env.TIKTOK_ACCESS_TOKEN;
-
-  if (!pixelCode || !accessToken) {
-    return new Response(JSON.stringify({ error: "Missing TikTok secrets" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  let body: any;
-  try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const { event, event_id, properties, page_url, referrer, ttclid, ttp } = body;
-
-  if (!event || !properties) {
-    return new Response(
-      JSON.stringify({ error: "Missing event or properties", body }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  const ip =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for") ||
-    "";
-
-  const userAgent = request.headers.get("user-agent") || "";
-
-  const tikTokPayload: any = {
-    pixel_code: pixelCode,
-    event,
-    event_id: event_id || undefined, // you’re fine not using dedupe
-    timestamp: new Date().toISOString(),
-    context: {
-      page: {
-        url: page_url,
-        referrer,
-      },
-      user: {
-        ip,
-        user_agent: userAgent,
-        ttp, // TikTok’s first-party cookie if you pass it
-      },
-      // TikTok’s recommended place for ttclid
-      ad: ttclid
-        ? {
-            callback: ttclid,
-          }
-        : undefined,
-    },
-    properties,
-  };
-
-  const tikTokRes = await fetch(
-    "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Token": accessToken,
-      },
-      body: JSON.stringify(tikTokPayload),
-    }
-  );
-
-  let tikTokData: any = null;
-  try {
-    tikTokData = await tikTokRes.json();
-  } catch {
-    // ignore parse error
-  }
-
-  const ok = tikTokRes.ok && tikTokData && tikTokData.code === 0;
-
-  if (!ok) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        status: tikTokRes.status,
-        tikTokData,
-        sentPayload: tikTokPayload,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  return new Response(
-    JSON.stringify({
-      success: true,
-      status: tikTokRes.status,
-      tikTokData,
-    }),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }
-  );
-};
-
-export const onRequestGet = async () =>
-  new Response("TikTok events endpoint OK", {
-    status: 200,
-    headers: { "Content-Type": "text/plain" },
-  });
