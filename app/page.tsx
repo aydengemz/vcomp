@@ -29,9 +29,35 @@ declare global {
     revokeConsent?: TTQMethod;
     grantConsent?: TTQMethod;
   }
+  interface ParticlesJSConfig {
+    particles?: {
+      number?: { value: number; density?: { enable: boolean; value_area: number } };
+      color?: { value: string };
+      shape?: { type: string };
+      opacity?: { value: number };
+      size?: { value: number; random?: boolean };
+      line_linked?: {
+        enable: boolean;
+        distance: number;
+        color: string;
+        opacity: number;
+        width: number;
+      };
+      move?: { enable: boolean; speed: number };
+    };
+    interactivity?: {
+      events?: {
+        onhover?: { enable: boolean; mode: string };
+        onclick?: { enable: boolean; mode: string };
+        resize?: boolean;
+      };
+    };
+    retina_detect?: boolean;
+  }
+
   interface Window {
     ttq?: TTQ;
-    particlesJS?: any;
+    particlesJS?: (elementId: string, config: ParticlesJSConfig) => void;
   }
 }
 
