@@ -83,6 +83,7 @@ const NAMES = [
 const BASE_DEST_URL =
   "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
+
 export default function AppleRewardPage() {
   // ——— helpers ———
   const extractSource = (): string => {
@@ -145,52 +146,45 @@ export default function AppleRewardPage() {
   // ——— pixel: ViewContent on load ———
   useEffect(() => {
     const fireVC = () => {
-      if (window.ttq) {
-        window.ttq.track("ViewContent", {
-          content_type: "product",
-          content_id: "apple-lander",
-        });
-      } else {
+      if (typeof window === "undefined" || !window.ttq) {
         setTimeout(fireVC, 50);
+        return;
       }
+      window.ttq.track("ViewContent", {
+        content_type: "product",
+        content_id: "apple-bonus-1000",   // ⭐ CHANGED: make consistent
+      });
     };
     fireVC();
   }, []);
 
-  // ——— A. Client-side fallback events (3 hits on load) ———
+  // ——— A. Client-side events on load (lightweight) ———
   useEffect(() => {
-    const fireFallbackEvents = () => {
-      if (!window.ttq) {
-        setTimeout(fireFallbackEvents, 50);
+    const fireOnLoadEvents = () => {
+      if (typeof window === "undefined" || !window.ttq) {
+        setTimeout(fireOnLoadEvents, 50);
         return;
       }
 
       const baseProps = {
-        content_id: "cash-rewards-750",
+        content_id: "apple-bonus-1000",   // ⭐ CHANGED: consistent ID
         content_type: "product",
         value: 0.5,
         currency: "USD",
-        contents: [{ content_id: "cash-rewards-750", quantity: 1 }],
+        contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
       };
 
-      // Fallback client events
+      // ⭐ CHANGED: only fire AddToCart on load, NOT Purchase/SubmitForm
       window.ttq.track("AddToCart", baseProps);
-      window.ttq.track("Purchase", baseProps);
-      window.ttq.track("SubmitForm", {
-        content_id: "cash-rewards-lead",
-        content_type: "lead",
-        value: 0.5,
-        currency: "USD",
-      });
     };
 
-    fireFallbackEvents();
+    fireOnLoadEvents();
   }, []);
 
   // ——— B. Server-side tracking helper ———
   const trackServerSideEvent = useCallback(
     (
-      eventType: "AddToCart" | "Purchase" | "SubmitForm",
+      eventType: "AddToCart" | "Purchase",
       properties: Record<string, unknown>
     ) => {
       if (typeof window === "undefined") {
@@ -211,6 +205,7 @@ export default function AppleRewardPage() {
           user_agent:
             typeof navigator !== "undefined" ? navigator.userAgent : "",
         },
+        // event_id: generateEventId(), // optional if you later want dedupe
       };
 
       return fetch("/track-tiktok-event.php", {
@@ -230,25 +225,18 @@ export default function AppleRewardPage() {
     if (typeof window === "undefined") return;
 
     const baseProps = {
-      content_id: "cash-rewards-750",
+      content_id: "apple-bonus-1000",     // ⭐ CHANGED: match UI
       content_type: "product",
       value: 0.5,
       currency: "USD",
-      contents: [{ content_id: "cash-rewards-750", quantity: 1 }],
-    };
-
-    const submitProps = {
-      content_id: "cash-rewards-lead",
-      content_type: "lead",
-      value: 0.5,
-      currency: "USD",
+      contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
     };
 
     try {
+      // ⭐ CHANGED: only server AddToCart + Purchase here
       Promise.all([
         trackServerSideEvent("AddToCart", baseProps),
         trackServerSideEvent("Purchase", baseProps),
-        trackServerSideEvent("SubmitForm", submitProps),
       ]).catch((err) => console.warn("Promise.all TTQ error:", err));
     } catch (err) {
       console.warn("CTA server-side tracking error:", err);
@@ -353,7 +341,7 @@ if (window.particlesJS) {
         <div className="reward-card">
           <div className="app-logo-container">
             <Image
-              src="/applogo1.jpg" // ensure this exists in /public
+              src="/applogo1.jpg"
               alt="Apple Logo"
               width={130}
               height={130}
