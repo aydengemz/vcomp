@@ -1,109 +1,102 @@
+// functions/api/tiktok-events.ts
 
-// export interface Env {
-//     TIKTOK_PIXEL_ID: string;
-//     TIKTOK_ACCESS_TOKEN: string;
-//   }
+export interface Env {
+    TIKTOK_PIXEL_ID: string;
+    TIKTOK_ACCESS_TOKEN: string;
+  }
   
-//   export const onRequestPost = async (context: {
-//     request: Request;
-//     env: Env;
-//   }) => {
-//     const { request, env } = context;
+  export const onRequestPost = async (context: { request: Request; env: Env }) => {
+    const { request, env } = context;
   
-//     const pixelCode = env.TIKTOK_PIXEL_ID;
-//     const accessToken = env.TIKTOK_ACCESS_TOKEN;
+    const pixelCode = env.TIKTOK_PIXEL_ID;
+    const accessToken = env.TIKTOK_ACCESS_TOKEN;
   
-//     if (!pixelCode || !accessToken) {
-//       return new Response(
-//         JSON.stringify({ error: "Missing TikTok secrets" }),
-//         { status: 500, headers: { "Content-Type": "application/json" } }
-//       );
-//     }
+    if (!pixelCode || !accessToken) {
+      return new Response(
+        JSON.stringify({ error: "Missing TikTok secrets" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
   
-//     let body: any;
-//     try {
-//       body = await request.json();
-//     } catch (err) {
-//       return new Response(
-//         JSON.stringify({ error: "Invalid JSON" }),
-//         { status: 400, headers: { "Content-Type": "application/json" } }
-//       );
-//     }
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   
-//     const {
-//       event,
-//       event_id,
-//       properties,
-//       page_url,
-//       referrer,
-//       ttclid,
-//     } = body;
+    const { event, event_id, properties, page_url, referrer, ttclid, ttp } = body;
   
-//     if (!event || !properties) {
-//       return new Response(
-//         JSON.stringify({ error: "Missing event or properties" }),
-//         { status: 400, headers: { "Content-Type": "application/json" } }
-//       );
-//     }
+    if (!event || !properties) {
+      return new Response(
+        JSON.stringify({ error: "Missing event or properties" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
   
-//     // Real IP from Cloudflare
-//     const ip =
-//       request.headers.get("cf-connecting-ip") ||
-//       request.headers.get("x-forwarded-for") ||
-//       "";
+    const ip =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-forwarded-for") ||
+      "";
   
-//     const payload = {
-//       pixel_code: pixelCode,
-//       event,
-//       event_id,
-//       timestamp: new Date().toISOString(), // REQUIRED FORMAT
-//       context: {
-//         page: {
-//           url: page_url,
-//           referrer,
-//         },
-//         user: {
-//           ip,
-//           user_agent: request.headers.get("user-agent") || "",
-//           ttclid,
-//         },
-//       },
-//       properties,
-//     };
+    const userAgent = request.headers.get("user-agent") || "";
   
-//     const res = await fetch(
-//       "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
-//       {
-//         method: "POST",
-//         headers: {
-//           "Content-Type": "application/json",
-//           "Access-Token": accessToken,
-//         },
-//         body: JSON.stringify(payload),
-//       }
-//     );
+    const tikTokPayload = {
+      pixel_code: pixelCode,
+      event,
+      // you said you DON'T want dedupe → event_id is optional/ignored
+      event_id: event_id || undefined,
+      timestamp: new Date().toISOString(),
+      context: {
+        page: {
+          url: page_url,
+          referrer,
+        },
+        user: {
+          ip,
+          user_agent: userAgent,
+          ttclid,
+          ttp,
+        },
+      },
+      properties,
+    };
   
-//     const data = await res.json().catch(() => ({}));
+    const res = await fetch(
+      "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify(tikTokPayload),
+      }
+    );
   
-//     if (data.code !== 0) {
-//       console.error("TikTok Events API error:", data);
-//       return new Response(JSON.stringify(data), {
-//         status: 500,
-//         headers: { "Content-Type": "application/json" },
-//       });
-//     }
+    const data = await res.json().catch(() => ({}));
   
-//     return new Response(JSON.stringify({ success: true, data }), {
-//       status: 200,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   };
+    if (!res.ok || (data && data.code && data.code !== 0)) {
+      console.error("TikTok Events API error:", { status: res.status, data });
+      return new Response(JSON.stringify({ error: "TikTok API error", details: data }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   
-export const onRequest = async () => {
-    // Handles ALL methods (GET, POST, etc.) for quick testing
-    return new Response("Hello from Cloudflare Pages Function /api/tiktok-events", {
+    return new Response(JSON.stringify({ success: true, data }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  
+  // Optional: handle GET so /api/tiktok-events works in the browser too
+  export const onRequestGet = async () =>
+    new Response("TikTok events endpoint OK", {
       status: 200,
       headers: { "Content-Type": "text/plain" },
     });
-  };
   
