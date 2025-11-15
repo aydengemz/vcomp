@@ -3,7 +3,7 @@
 export interface Env {
   TIKTOK_PIXEL_ID: string;
   TIKTOK_ACCESS_TOKEN: string;
-  // TIKTOK_TEST_EVENT_CODE?: string; // ❌ not needed for prod
+  TIKTOK_TEST_EVENT_CODE?: string; // 👈 new
 }
 
 export const onRequestPost = async (context: { request: Request; env: Env }) => {
@@ -11,6 +11,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
 
   const pixelCode = env.TIKTOK_PIXEL_ID;
   const accessToken = env.TIKTOK_ACCESS_TOKEN;
+  const testEventCode = env.TIKTOK_TEST_EVENT_CODE; // 👈
 
   if (!pixelCode || !accessToken) {
     return new Response(JSON.stringify({ error: "Missing TikTok secrets" }), {
@@ -61,17 +62,17 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       user: {
         ip,
         user_agent: userAgent,
-        ttp, // TikTok’s first-party cookie if you pass it
+        ttclid,
+        ttp,
       },
-      // TikTok’s recommended place for ttclid
-      ad: ttclid
-        ? {
-            callback: ttclid,
-          }
-        : undefined,
     },
     properties,
   };
+
+  // 👇 THIS is what makes Events API show up in Test Events
+  if (testEventCode) {
+    tikTokPayload.test_event_code = testEventCode;
+  }
 
   const tikTokRes = await fetch(
     "https://business-api.tiktok.com/open_api/v1.3/pixel/track/",

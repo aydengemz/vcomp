@@ -79,7 +79,7 @@ const NAMES = [
 
 // affiliate base
 const BASE_DEST_URL =
-  "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
+  "https://www.ch6rrl8trk.com/cmp/W3WD1/4PN2D/?sub1=";
 
 // simple client-side event_id helper
 const generateEventId = () =>
