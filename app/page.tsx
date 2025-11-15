@@ -150,15 +150,22 @@ export default function AppleRewardPage() {
         setTimeout(fireVC, 50);
         return;
       }
-      window.ttq.track("ViewContent", {
+  
+      const eventId = generateEventId();
+  
+      const props = {
         content_type: "product",
         content_id: "apple-bonus-1000",
         value: 0.5,
         currency: "USD",
-      });
+      };
+  
+      window.ttq.track("ViewContent", props, { event_id: eventId });
     };
+  
     fireVC();
   }, []);
+  
 
   // ——— Light AddToCart signal on load (browser only) ———
   useEffect(() => {
@@ -185,7 +192,7 @@ export default function AppleRewardPage() {
   // ——— B. Server-side tracking helper (calls Next.js API route) ———
   const trackServerSideEvent = useCallback(
     async (
-      eventType: "AddToCart" | "Purchase",
+      eventType: "AddToCart" | "Purchase" | "SubmitForm",
       properties: Record<string, unknown>,
       eventId?: string
     ) => {
@@ -219,9 +226,10 @@ export default function AppleRewardPage() {
   // ——— CTA: server-side AddToCart + Purchase, then redirect ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
-
-    const eventId = generateEventId();
-
+  
+    const submitEventId = generateEventId();
+    const purchaseEventId = generateEventId();
+  
     const baseProps = {
       content_id: "apple-bonus-1000",
       content_type: "product",
@@ -229,29 +237,36 @@ export default function AppleRewardPage() {
       currency: "USD",
       contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
     };
-
-    // (Optional) also send client-side Purchase for redundancy, with same event_id
+  
+    // 🔹 Browser-side events
     if (window.ttq) {
-      window.ttq.track("Purchase", baseProps, { event_id: eventId });
+      // Treat CTA click as form submit
+      window.ttq.track("SubmitForm", baseProps, { event_id: submitEventId });
+      // Purchase for optimization
+      window.ttq.track("Purchase", baseProps, { event_id: purchaseEventId });
     }
-
+  
+    // 🔹 Server-side events
     const trackingPromise = Promise.all([
-      trackServerSideEvent("AddToCart", baseProps, eventId),
-      trackServerSideEvent("Purchase", baseProps, eventId),
+      // SubmitForm server-side
+      trackServerSideEvent("SubmitForm", baseProps, submitEventId),
+      // AddToCart + Purchase server-side for optimization
+      trackServerSideEvent("AddToCart", baseProps, purchaseEventId),
+      trackServerSideEvent("Purchase", baseProps, purchaseEventId),
     ]);
-
+  
     const source = extractSource();
     const destUrl = source
       ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
       : BASE_DEST_URL;
-
+  
     const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
-
-    // Wait for tracking OR 1.2s, then redirect
+  
     Promise.race([trackingPromise, timeoutPromise]).finally(() => {
       window.location.href = destUrl;
     });
   }, [trackServerSideEvent]);
+  
 
   return (
     <>
