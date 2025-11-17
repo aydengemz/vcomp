@@ -1,4 +1,3 @@
-// app/api/tiktok-events/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 const TIKTOK_PIXEL_CODE = process.env.TIKTOK_PIXEL_ID;
@@ -16,9 +15,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const {
-      event,          // "AddToCart" | "Purchase" etc.
-      event_id,       // optional
-      properties,     // your baseProps
+      event,      // "ViewContent" | "AddToCart" | "Purchase" | "SubmitForm"
+      event_id,
+      properties,
       page_url,
       referrer,
       ttclid,
@@ -40,9 +39,8 @@ export async function POST(req: NextRequest) {
 
     const tikTokPayload = {
       pixel_code: TIKTOK_PIXEL_CODE,
-      event,                            // e.g. "Purchase"
-      event_id: event_id || undefined,  // used for dedupe with browser
-      // ✅ FIX: TikTok wants a string timestamp
+      event,
+      event_id: event_id || undefined,
       timestamp: new Date().toISOString(),
       context: {
         page: {
@@ -55,7 +53,7 @@ export async function POST(req: NextRequest) {
           ttclid,
         },
       },
-      properties, // content_id, value, currency, contents, etc.
+      properties,
     };
 
     const res = await fetch(

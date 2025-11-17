@@ -79,11 +79,19 @@ const NAMES = [
 
 // affiliate base
 const BASE_DEST_URL =
-  "https://www.ch6rrl8trk.com/cmp/W3WD1/4PN2D/?sub1=";
+  "https://t.afftrackr.com/?lnwk=5yuBgl2A4ZKvvjXwmlNTY1xDZUMy8IfgvQJDRoz7h5U%3d&s1=";
 
 // simple client-side event_id helper
 const generateEventId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const baseProps = {
+  content_id: "apple-bonus-1000",
+  content_type: "product",
+  value: 0.5,
+  currency: "USD",
+  contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
+};
 
 export default function AppleRewardPage() {
   // ——— helpers ———
@@ -143,56 +151,10 @@ export default function AppleRewardPage() {
     };
   }, []);
 
-  // ——— pixel: ViewContent on load (browser only) ———
-  useEffect(() => {
-    const fireVC = () => {
-      if (typeof window === "undefined" || !window.ttq) {
-        setTimeout(fireVC, 50);
-        return;
-      }
-  
-      const eventId = generateEventId();
-  
-      const props = {
-        content_type: "product",
-        content_id: "apple-bonus-1000",
-        value: 0.5,
-        currency: "USD",
-      };
-  
-      window.ttq.track("ViewContent", props, { event_id: eventId });
-    };
-  
-    fireVC();
-  }, []);
-  
-
-  // ——— Light AddToCart signal on load (browser only) ———
-  useEffect(() => {
-    const fireOnLoadEvents = () => {
-      if (typeof window === "undefined" || !window.ttq) {
-        setTimeout(fireOnLoadEvents, 50);
-        return;
-      }
-
-      const baseProps = {
-        content_id: "apple-bonus-1000",
-        content_type: "product",
-        value: 0.5,
-        currency: "USD",
-        contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
-      };
-
-      window.ttq.track("AddToCart", baseProps);
-    };
-
-    fireOnLoadEvents();
-  }, []);
-
-  // ——— B. Server-side tracking helper (calls Next.js API route) ———
+  // ——— server-side tracking helper (calls Next.js API route) ———
   const trackServerSideEvent = useCallback(
     async (
-      eventType: "AddToCart" | "Purchase" | "SubmitForm",
+      eventType: "ViewContent" | "AddToCart" | "Purchase" | "SubmitForm",
       properties: Record<string, unknown>,
       eventId?: string
     ) => {
@@ -223,50 +185,74 @@ export default function AppleRewardPage() {
     []
   );
 
-  // ——— CTA: server-side AddToCart + Purchase, then redirect ———
+  // ——— ViewContent on load (browser + server, like Playful but with server copy) ———
+  useEffect(() => {
+    const fireVC = () => {
+      if (typeof window === "undefined") return;
+
+      const eventId = generateEventId();
+
+      // browser-side ViewContent
+      if (window.ttq) {
+        window.ttq.track("ViewContent", baseProps, { event_id: eventId });
+      } else {
+        // retry until ttq exists
+        setTimeout(fireVC, 50);
+        return;
+      }
+
+      // server-side ViewContent
+      trackServerSideEvent("ViewContent", baseProps, eventId);
+    };
+
+    fireVC();
+  }, [trackServerSideEvent]);
+
+  // ——— CTA: AddToCart + SubmitForm + Purchase (browser + server) ———
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
-  
+
+    const atcEventId = generateEventId();
     const submitEventId = generateEventId();
     const purchaseEventId = generateEventId();
-  
-    const baseProps = {
-      content_id: "apple-bonus-1000",
-      content_type: "product",
-      value: 0.5,
-      currency: "USD",
-      contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
-    };
-  
-    // 🔹 Browser-side events
-    if (window.ttq) {
-      // Treat CTA click as form submit
-      window.ttq.track("SubmitForm", baseProps, { event_id: submitEventId });
-      // Purchase for optimization
-      window.ttq.track("Purchase", baseProps, { event_id: purchaseEventId });
+
+    // 🔹 Browser-side events (same pattern as Playful lander)
+    try {
+      window.ttq?.track("AddToCart", baseProps, { event_id: atcEventId });
+    } catch {
+      /* ignore */
     }
-  
-    // 🔹 Server-side events
+
+    try {
+      window.ttq?.track("SubmitForm", baseProps, { event_id: submitEventId });
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      window.ttq?.track("Purchase", baseProps, { event_id: purchaseEventId });
+    } catch {
+      /* ignore */
+    }
+
+    // 🔹 Server-side copies using the SAME event_ids (for dedupe)
     const trackingPromise = Promise.all([
-      // SubmitForm server-side
+      trackServerSideEvent("AddToCart", baseProps, atcEventId),
       trackServerSideEvent("SubmitForm", baseProps, submitEventId),
-      // AddToCart + Purchase server-side for optimization
-      trackServerSideEvent("AddToCart", baseProps, purchaseEventId),
       trackServerSideEvent("Purchase", baseProps, purchaseEventId),
     ]);
-  
+
     const source = extractSource();
     const destUrl = source
       ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
       : BASE_DEST_URL;
-  
+
     const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
-  
+
     Promise.race([trackingPromise, timeoutPromise]).finally(() => {
       window.location.href = destUrl;
     });
   }, [trackServerSideEvent]);
-  
 
   return (
     <>
@@ -304,42 +290,51 @@ export default function AppleRewardPage() {
         `}
       </Script>
 
-      {/* particles.js script – put particles.min.js in /public/js */}
       <Script src="/js/particles.min.js" strategy="afterInteractive" />
-      <Script id="particles-init" strategy="afterInteractive">
-        {`
-if (window.particlesJS) {
-  window.particlesJS('particles-js', {
-    particles: {
-      number: { value: 80, density: { enable: true, value_area: 800 } },
-      color: { value: '#1d1d1f' },
-      shape: { type: 'circle' },
-      opacity: { value: 0.5 },
-      size: { value: 3, random: true },
-      line_linked: {
-        enable: true,
-        distance: 150,
-        color: '#1d1d1f',
-        opacity: 0.4,
-        width: 1
-      },
-      move: { enable: true, speed: 6 }
-    },
-    interactivity: {
-      events: {
-        onhover: { enable: true, mode: 'repulse' },
-        onclick: { enable: true, mode: 'push' },
-        resize: true
-      }
-    },
-    retina_detect: true
-  });
-}
-        `}
-      </Script>
+
+<Script id="particles-init" strategy="afterInteractive">
+  {`
+(function initParticles() {
+  function start() {
+    if (window.particlesJS) {
+      window.particlesJS('particles-js', {
+        particles: {
+          number: { value: 80, density: { enable: true, value_area: 800 } },
+          color: { value: '#1d1d1f' },
+          shape: { type: 'circle' },
+          opacity: { value: 0.5 },
+          size: { value: 3, random: true },
+          line_linked: {
+            enable: true,
+            distance: 150,
+            color: '#1d1d1f',
+            opacity: 0.4,
+            width: 1
+          },
+          move: { enable: true, speed: 6 }
+        },
+        interactivity: {
+          events: {
+            onhover: { enable: true, mode: 'repulse' },
+            onclick: { enable: true, mode: 'push' },
+            resize: true
+          }
+        },
+        retina_detect: true
+      });
+    } else {
+      // Try again until the script is ready
+      setTimeout(start, 50);
+    }
+  }
+  start();
+})();
+  `}
+</Script>
+
 
       {/* Background particles layer */}
-      <div id="particles-js" className="particles-bg" />
+      <div id="particles-js" className="particles-bg"/>
 
       {/* Notifications */}
       {notifications.map((n) => (
