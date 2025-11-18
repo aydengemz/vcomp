@@ -62,7 +62,7 @@ declare global {
   }
 }
 
-const TIKTOK_PIXEL_IDS = ["D40E2VRC77UD89P2K3TG"];
+const TIKTOK_PIXEL_IDS = ["D4AP363C77U6M9K6S7TG"];
 
 const NAMES = [
   "John D.",
