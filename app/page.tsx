@@ -77,9 +77,13 @@ const NAMES = [
   "Taylor G.",
 ];
 
-// affiliate base
+// Old/Default affiliate base
 const BASE_DEST_URL =
   "https://t.afftrackr.com/?r3x=yuSAT88Szjjrj4yXNPuW5kNu7p8EFSy9vQJDRoz7h5U%3d&s1=";
+
+// New affiliate base if "?o=g" present in URL
+const ALT_DEST_URL =
+  "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&source=";
 
 // simple client-side event_id helper
 const generateEventId = () =>
@@ -121,6 +125,18 @@ export default function AppleRewardPage() {
     } catch {
       return "";
     }
+  };
+
+  // ——— helper to choose dest url based on "?o=g" (case-insensitive) ———
+  const getBaseDestUrl = (): string => {
+    if (typeof window === "undefined") return BASE_DEST_URL;
+    // Look for ?o=g (as param) in the url string
+    const url = window.location.href;
+    // checks for ?o=g or &o=g; not case-sensitive
+    if (/\?o=g(&|$)/i.test(url) || /&o=g(&|$)/i.test(url)) {
+      return ALT_DEST_URL;
+    }
+    return BASE_DEST_URL;
   };
 
   // ——— state for “New Order” notifications ———
@@ -243,9 +259,10 @@ export default function AppleRewardPage() {
     ]);
 
     const source = extractSource();
+    const baseDestUrl = getBaseDestUrl();
     const destUrl = source
-      ? `${BASE_DEST_URL}${encodeURIComponent(source)}`
-      : BASE_DEST_URL;
+      ? `${baseDestUrl}${encodeURIComponent(source)}`
+      : baseDestUrl;
 
     const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
 
