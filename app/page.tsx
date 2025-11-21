@@ -79,7 +79,7 @@ const NAMES = [
 
 // Old/Default affiliate base
 const BASE_DEST_URL =
-  "https://t.afftrackr.com/?r3x=yuSAT88Szjjrj4yXNPuW5kNu7p8EFSy9vQJDRoz7h5U%3d&s1=";
+  "https://trkfy.org/aff_c?offer_id=2977&aff_id=11848&source=";
 
 // New affiliate base if "?o=g" present in URL
 const ALT_DEST_URL =
