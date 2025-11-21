@@ -38,7 +38,7 @@ declare global {
 const TIKTOK_PIXEL_IDS = ["D4AP363C77U6M9K6S7TG"];
 
 const BASE_DEST_URL =
-  "https://trkfy.org/aff_c?offer_id=2977&aff_id=11848&source=";
+  "https://gloffers.org/aff_c?offer_id=3569&aff_id=11848&source=";
 
 const ALT_DEST_URL =
   "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&source=";
