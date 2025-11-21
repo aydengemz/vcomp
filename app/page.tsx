@@ -1,9 +1,9 @@
+// pages/index.tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import Head from "next/head";
 import Script from "next/script";
-import Image from "next/image";
 
 declare global {
   type TTQMethod = (...args: unknown[]) => void;
@@ -30,75 +30,31 @@ declare global {
     grantConsent?: TTQMethod;
   }
 
-  interface ParticlesJSConfig {
-    particles?: {
-      number?: { value: number; density?: { enable: boolean; value_area: number } };
-      color?: { value: string };
-      shape?: { type: string };
-      opacity?: { value: number };
-      size?: { value: number; random?: boolean };
-      line_linked?: {
-        enable: boolean;
-        distance: number;
-        color: string;
-        opacity: number;
-        width: number;
-      };
-      move?: { enable: boolean; speed: number };
-    };
-    interactivity?: {
-      events?: {
-        onhover?: { enable: boolean; mode: string };
-        onclick?: { enable: boolean; mode: string };
-        resize?: boolean;
-      };
-    };
-    retina_detect?: boolean;
-  }
-
   interface Window {
     ttq?: TTQ;
-    particlesJS?: (elementId: string, config: ParticlesJSConfig) => void;
   }
 }
 
 const TIKTOK_PIXEL_IDS = ["D4AP363C77U6M9K6S7TG"];
 
-const NAMES = [
-  "John D.",
-  "Sarah M.",
-  "David L.",
-  "Emma W.",
-  "Michael R.",
-  "Jessica K.",
-  "Chris P.",
-  "Amanda S.",
-  "Ryan L.",
-  "Taylor G.",
-];
-
-// Old/Default affiliate base
 const BASE_DEST_URL =
   "https://trkfy.org/aff_c?offer_id=2977&aff_id=11848&source=";
 
-// New affiliate base if "?o=g" present in URL
 const ALT_DEST_URL =
   "https://uplevelrewarded.com/aff_c?offer_id=2596&aff_id=11848&source=";
 
-// simple client-side event_id helper
 const generateEventId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const baseProps = {
-  content_id: "apple-bonus-1000",
+  content_id: "apple-bonus-750",
   content_type: "product",
   value: 0.5,
   currency: "USD",
-  contents: [{ content_id: "apple-bonus-1000", quantity: 1 }],
+  contents: [{ content_id: "apple-bonus-750", quantity: 1 }],
 };
 
 export default function AppleRewardPage() {
-  // ——— helpers ———
   const extractSource = (): string => {
     if (typeof window === "undefined") return "";
     const raw = window.location.search.replace(/^\?/, "");
@@ -127,47 +83,15 @@ export default function AppleRewardPage() {
     }
   };
 
-  // ——— helper to choose dest url based on "?o=g" (case-insensitive) ———
   const getBaseDestUrl = (): string => {
     if (typeof window === "undefined") return BASE_DEST_URL;
-    // Look for ?o=g (as param) in the url string
     const url = window.location.href;
-    // checks for ?o=g or &o=g; not case-sensitive
     if (/\?o=g(&|$)/i.test(url) || /&o=g(&|$)/i.test(url)) {
       return ALT_DEST_URL;
     }
     return BASE_DEST_URL;
   };
 
-  // ——— state for “New Order” notifications ———
-  const [notifications, setNotifications] = useState<
-    { id: string; name: string }[]
-  >([]);
-
-  useEffect(() => {
-    const createNotification = () => {
-      const name = NAMES[Math.floor(Math.random() * NAMES.length)];
-      const id = `${name}-${Date.now()}`;
-      setNotifications((prev) => [...prev, { id, name }]);
-      setTimeout(
-        () => setNotifications((prev) => prev.filter((n) => n.id !== id)),
-        5000
-      );
-    };
-
-    const first = setTimeout(createNotification, 2000);
-    const interval = setInterval(
-      createNotification,
-      Math.random() * 4000 + 8000
-    );
-
-    return () => {
-      clearTimeout(first);
-      clearInterval(interval);
-    };
-  }, []);
-
-  // ——— server-side tracking helper (calls Next.js API route) ———
   const trackServerSideEvent = useCallback(
     async (
       eventType: "ViewContent" | "AddToCart" | "Purchase" | "SubmitForm",
@@ -201,30 +125,27 @@ export default function AppleRewardPage() {
     []
   );
 
-  // ——— ViewContent on load (browser + server, like Playful but with server copy) ———
+  // ViewContent on load
   useEffect(() => {
     const fireVC = () => {
       if (typeof window === "undefined") return;
 
       const eventId = generateEventId();
 
-      // browser-side ViewContent
       if (window.ttq) {
         window.ttq.track("ViewContent", baseProps, { event_id: eventId });
       } else {
-        // retry until ttq exists
         setTimeout(fireVC, 50);
         return;
       }
 
-      // server-side ViewContent
       trackServerSideEvent("ViewContent", baseProps, eventId);
     };
 
     fireVC();
   }, [trackServerSideEvent]);
 
-  // ——— CTA: AddToCart + SubmitForm + Purchase (browser + server) ———
+  // CTA click handler
   const handleCTA = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -232,26 +153,18 @@ export default function AppleRewardPage() {
     const submitEventId = generateEventId();
     const purchaseEventId = generateEventId();
 
-    // 🔹 Browser-side events (same pattern as Playful lander)
     try {
       window.ttq?.track("AddToCart", baseProps, { event_id: atcEventId });
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
     try {
       window.ttq?.track("SubmitForm", baseProps, { event_id: submitEventId });
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
     try {
       window.ttq?.track("Purchase", baseProps, { event_id: purchaseEventId });
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
-    // 🔹 Server-side copies using the SAME event_ids (for dedupe)
     const trackingPromise = Promise.all([
       trackServerSideEvent("AddToCart", baseProps, atcEventId),
       trackServerSideEvent("SubmitForm", baseProps, submitEventId),
@@ -274,7 +187,7 @@ export default function AppleRewardPage() {
   return (
     <>
       <Head>
-        <title>Apple Pay</title>
+        <title>Apple Gift Card - Get Your $750 Reward</title>
         <meta charSet="UTF-8" />
         <meta
           name="viewport"
@@ -285,7 +198,7 @@ export default function AppleRewardPage() {
         <meta name="format-detection" content="telephone=no" />
       </Head>
 
-      {/* TikTok Pixel loader (multi-ID ready) */}
+      {/* TikTok Pixel loader */}
       <Script id="ttq-init" strategy="afterInteractive">
         {`
 !function (w, d, t) {
@@ -307,110 +220,200 @@ export default function AppleRewardPage() {
         `}
       </Script>
 
-      <Script src="/js/particles.min.js" strategy="afterInteractive" />
-
-<Script id="particles-init" strategy="afterInteractive">
-  {`
-(function initParticles() {
-  function start() {
-    if (window.particlesJS) {
-      window.particlesJS('particles-js', {
-        particles: {
-          number: { value: 80, density: { enable: true, value_area: 800 } },
-          color: { value: '#1d1d1f' },
-          shape: { type: 'circle' },
-          opacity: { value: 0.5 },
-          size: { value: 3, random: true },
-          line_linked: {
-            enable: true,
-            distance: 150,
-            color: '#1d1d1f',
-            opacity: 0.4,
-            width: 1
-          },
-          move: { enable: true, speed: 6 }
-        },
-        interactivity: {
-          events: {
-            onhover: { enable: true, mode: 'repulse' },
-            onclick: { enable: true, mode: 'push' },
-            resize: true
-          }
-        },
-        retina_detect: true
-      });
-    } else {
-      // Try again until the script is ready
-      setTimeout(start, 50);
-    }
-  }
-  start();
-})();
-  `}
-</Script>
-
-
-      {/* Background particles layer */}
-      <div id="particles-js" className="particles-bg"/>
-
-      {/* Notifications */}
-      {notifications.map((n) => (
-        <div key={n.id} className="notification show">
-          <div className="notification-icon">📱</div>
-          <div>
-            <b>New Order</b>
-            <div>{n.name} claimed $750!</div>
-          </div>
-        </div>
-      ))}
-
-      {/* Main card */}
-      <div className="page-container">
-        <div className="reward-card">
-          <div className="app-logo-container">
-            <Image
-              src="/applogo1.jpg"
-              alt="Apple Logo"
-              width={130}
-              height={130}
-              className="app-logo"
-            />
-            <div className="cash-text">APPLE BONUS</div>
-          </div>
-
-          <div id="amount" className="amount">
-            $1000
-          </div>
-          <div className="amount-subtext">deposited to you</div>
-
-          <div className="instructions-container">
-            <div className="instruction-item">
-              <span className="number">1</span>
-              <span>Click the Button Below</span>
-            </div>
-            <div className="instruction-item">
-              <span className="number">2</span>
-              <span>Enter Details, Take a Quiz</span>
-            </div>
-            <div className="instruction-item">
-              <span className="number">3</span>
-              <span>Complete Recommended Deals</span>
-            </div>
-            <div className="instruction-item">
-              <span className="number">4</span>
-              <span>Claim Reward &amp; Repeat</span>
-            </div>
-          </div>
-
-          <button className="claim-button" onClick={handleCTA}>
-            Get Yours →
-          </button>
-
-          <div className="tiny-note">
-            By continuing you accept our Terms &amp; Privacy.
-          </div>
-        </div>
+      {/* Geo Indicator */}
+      <div className="geo-indicator">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span>Region: USA</span>
       </div>
+
+      {/* Header */}
+      <header className="header">
+        <div className="header-content">
+          <a
+            href="https://www.apple.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg className="apple-logo" viewBox="0 0 16 20" fill="currentColor">
+              <path d="M13.1 6.5C12.9 6.7 11.8 7.4 11.8 9.1C11.8 11.1 13.2 11.8 13.3 11.8C13.3 11.9 13 12.9 12.3 14C11.7 14.9 11.1 15.8 10 15.8C9 15.8 8.6 15.2 7.5 15.2C6.4 15.2 5.9 15.8 5 15.8C4 15.8 3.4 14.9 2.7 13.9C1.9 12.7 1.2 10.8 1.2 9C1.2 6.6 2.7 5.3 4.3 5.3C5.3 5.3 6.2 6 6.8 6C7.4 6 8.4 5.3 9.6 5.3C10 5.3 11.5 5.3 12.5 6.5L13.1 6.5ZM9.6 3.4C10.1 2.8 10.5 2 10.4 1.2C9.7 1.2 8.8 1.7 8.3 2.3C7.8 2.8 7.4 3.6 7.5 4.4C8.3 4.5 9.1 4 9.6 3.4Z"></path>
+            </svg>
+          </a>
+
+          <div className="header-icons">
+            <a
+              href="https://www.apple.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg
+                className="header-icon"
+                viewBox="0 0 18 18"
+                fill="currentColor"
+              >
+                <path d="M17.5 16.4l-4.8-4.8c1-1.2 1.5-2.7 1.5-4.3 0-3.9-3.1-7-7-7s-7 3.1-7 7 3.1 7 7 7c1.6 0 3.1-.5 4.3-1.5l4.8 4.8c.2.2.4.3.6.3s.4-.1.6-.3c.3-.3.3-.8 0-1.2zM1.7 7.2c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5-2.5 5.5-5.5 5.5-5.5-2.5-5.5-5.5z"></path>
+              </svg>
+            </a>
+
+            <a
+              href="https://www.apple.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg
+                className="header-icon"
+                viewBox="0 0 18 18"
+                fill="currentColor"
+              >
+                <path d="M13.5 5h-1c0-1.9-1.6-3.5-3.5-3.5S5.5 3.1 5.5 5h-1C3.7 5 3 5.7 3 6.5v8c0 .8.7 1.5 1.5 1.5h9c.8 0 1.5-.7 1.5-1.5v-8c0-.8-.7-1.5-1.5-1.5zM9 2.5c1.4 0 2.5 1.1 2.5 2.5h-5c0-1.4 1.1-2.5 2.5-2.5zm4.5 12c0 .3-.2.5-.5.5H5c-.3 0-.5-.2-.5-.5v-8c0-.3.2-.5.5-.5h.5v1.5c0 .3.2.5.5.5s.5-.2.5-.5V6h5v1.5c0 .3.2.5.5.5s.5-.2.5-.5V6h.5c.3 0 .5.2.5.5v8z"></path>
+              </svg>
+            </a>
+
+            <a
+              href="https://www.apple.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg
+                className="header-icon"
+                viewBox="0 0 18 18"
+                fill="currentColor"
+              >
+                <path d="M2 4.5h14c.3 0 .5-.2.5-.5s-.2-.5-.5-.5H2c-.3 0-.5.2-.5.5s.2.5.5.5zm0 5h14c.3 0 .5-.2.5-.5s-.2-.5-.5-.5H2c-.3 0-.5.2-.5.5s.2.5.5.5zm0 5h14c.3 0 .5-.2.5-.5s-.2-.5-.5-.5H2c-.3 0-.5.2-.5.5s.2.5.5.5z"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="hero">
+        <div className="hero-content">
+          <h1>
+            Get Your $750
+            <br />
+            Apple Gift Card
+          </h1>
+          <p className="subtitle">Complete 3 simple steps to claim your reward</p>
+        </div>
+      </section>
+
+      {/* Steps Section */}
+      <section className="steps-container">
+        <div className="steps-grid">
+          <div className="step-card">
+            <div className="step-icon-wrapper">
+              <svg className="step-icon" viewBox="0 0 56 56" fill="none">
+                <circle cx="28" cy="28" r="28" fill="#F5F5F7"></circle>
+                <path
+                  d="M28 18C25.2 18 23 20.2 23 23C23 25.8 25.2 28 28 28C30.8 28 33 25.8 33 23C33 20.2 30.8 18 28 18ZM28 26C26.3 26 25 24.7 25 23C25 21.3 26.3 20 28 20C29.7 20 31 21.3 31 23C31 24.7 29.7 26 28 26ZM36 38V36C36 32.7 33.3 30 30 30H26C22.7 30 20 32.7 20 36V38H22V36C22 33.8 23.8 32 26 32H30C32.2 32 34 33.8 34 36V38H36Z"
+                  fill="#0071E3"
+                ></path>
+              </svg>
+            </div>
+            <h3 className="step-title">
+              Enter your <span className="highlight">basic info.</span>
+            </h3>
+            <p className="step-description">
+              Quick registration with just your name and email address
+            </p>
+          </div>
+
+          <div className="step-card">
+            <div className="step-icon-wrapper">
+              <svg className="step-icon" viewBox="0 0 56 56" fill="none">
+                <circle cx="28" cy="28" r="28" fill="#F5F5F7"></circle>
+                <path
+                  d="M34 20H22C20.9 20 20 20.9 20 22V34C20 35.1 20.9 36 22 36H34C35.1 36 36 35.1 36 34V22C36 20.9 35.1 20 34 20ZM34 34H22V22H34V34ZM24 26.5C24 26.2 24.2 26 24.5 26H31.5C31.8 26 32 26.2 32 26.5S31.8 27 31.5 27H24.5C24.2 27 24 26.8 24 26.5ZM24 29.5C24 29.2 24.2 29 24.5 29H31.5C31.8 29 32 29.2 32 29.5S31.8 30 31.5 30H24.5C24.2 30 24 29.8 24 29.5ZM24 32.5C24 32.2 24.2 32 24.5 32H28.5C28.8 32 29 32.2 29 32.5S28.8 33 28.5 33H24.5C24.2 33 24 32.8 24 32.5Z"
+                  fill="#34C759"
+                ></path>
+              </svg>
+            </div>
+            <h3 className="step-title">
+              Complete a <span className="highlight">quick survey.</span>
+            </h3>
+            <p className="step-description">
+              Answer a few questions about your shopping preferences
+            </p>
+          </div>
+
+          <div className="step-card">
+            <div className="step-icon-wrapper">
+              <svg className="step-icon" viewBox="0 0 56 56" fill="none">
+                <circle cx="28" cy="28" r="28" fill="#F5F5F7"></circle>
+                <path
+                  d="M35.5 24.5L26.5 33.5L20.5 27.5L22 26L26.5 30.5L34 23L35.5 24.5Z"
+                  fill="#FF9500"
+                ></path>
+                <path
+                  d="M28 18C22.5 18 18 22.5 18 28C18 33.5 22.5 38 28 38C33.5 38 38 33.5 38 28C38 22.5 33.5 18 28 18ZM28 36C23.6 36 20 32.4 20 28C20 23.6 23.6 20 28 20C32.4 20 36 23.6 36 28C36 32.4 32.4 36 28 36Z"
+                  fill="#FF9500"
+                ></path>
+              </svg>
+            </div>
+            <h3 className="step-title">
+              Select <span className="highlight">partner deals.</span>
+            </h3>
+            <p className="step-description">
+              Choose from recommended offers to maximize your reward
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="cta-section">
+        <div className="cta-container">
+          <button className="cta-button" onClick={handleCTA}>
+            Claim Your $750 Reward
+          </button>
+          <p className="cta-helper-text">
+            By continuing you accept our Terms &amp; Privacy.
+          </p>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="footer">
+        <div className="footer-content">
+          <a
+            href="https://www.apple.com/legal/"
+            className="footer-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Terms of Use
+          </a>
+          <a
+            href="https://www.apple.com/legal/privacy/"
+            className="footer-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Privacy Policy
+          </a>
+          <a
+            href="https://www.apple.com/"
+            className="footer-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Apple.com
+          </a>
+        </div>
+      </footer>
     </>
   );
 }
